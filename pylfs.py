@@ -111,7 +111,7 @@ def draw_lanes(img, lines, color=[0, 255, 255], thickness=3):
 def process_img(image):
     original_image = image
     # edge detection
-    processed_img =  cv2.Canny(image, threshold1 = 20, threshold2=30)
+    processed_img =  cv2.Canny(image, threshold1 = 150, threshold2=250)
     
     processed_img = cv2.GaussianBlur(processed_img,(5,5),0)
     
@@ -180,8 +180,8 @@ while True:
     print('Frame took {} seconds'.format(time.time()-last_time))
     last_time = time.time()
     new_screen,original_image, m1, m2 = process_img(screen)
-    #cv2.imshow('window', new_screen)
-    cv2.imshow('Module View',cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
+    cv2.imshow('Gray view', new_screen)
+    #cv2.imshow('Module View',cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
 
     # if m1 < 0 and m2 < 0:
     #     right()
