@@ -309,16 +309,23 @@ def filter_colors(image):
 
 def annotate_image_array(image_in):
     """ Given an image Numpy array, return the annotated image as a Numpy array """
-    # Apply Gaussian smoothing
-    blur_gray = gaussian_blur(image_in, kernel_size)
-    # Only keep white and gray pixels in the image, all other pixels become black
-    image = filter_colors(blur_gray)
     
     # Read in and grayscale the image
-    gray = grayscale(image)
+    gray = grayscale(image_in)
+    
+    # darken the gray image
+    
+    # Only keep white and gray pixels in the image, all other pixels become black
+    image = filter_colors(gray)
+    
+    # Apply Gaussian smoothing
+    blur_gray = gaussian_blur(image, kernel_size)
+    
+    
+    
 
     # Apply Canny Edge Detector
-    edges = canny(gray, low_threshold, high_threshold)
+    edges = canny(blur_gray, low_threshold, high_threshold)
     cv2.imshow('Debugging view', edges)
     # Create masked edges using trapezoid-shaped region-of-interest
     imshape = image.shape
