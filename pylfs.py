@@ -7,144 +7,343 @@ from numpy import ones, vstack
 from numpy.linalg import lstsq
 from controls import PressKey, ReleaseKey, Z, Q, D, S
 from statistics import mean
+import imutils
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
-def roi(img, vertices):
+# def roi(img, vertices):
+#     """
+#     Region Of Interest:
+#     This function will remove all the unecessary lines. 
+#     So the module will only see the road lines.
+#     """
+#     # blank mask
+#     mask = np.zeros_like(img)
+#     cv2.fillPoly(mask, vertices, 255)
+#     masked = cv2.bitwise_and(img, mask)
+#     return masked
+
+# def canny(imgray):
+#     imgray = cv2.GaussianBlur(imgray, (5,5), 200)
+#     canny_low = 5
+#     canny_high = 150
+
+#     thresh = cv2.Canny(imgray,canny_low,canny_high)
+#     return thresh
+
+# def process_img(image):
+#     original_image = image
+
+#     # edge detection
+#     #processed_img =  cv2.Canny(image, threshold1 = 150, threshold2=250)
+#     #processed_img = cv2.GaussianBlur(processed_img,(5,5),0)
+    
+#     imgray = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+#     img = imutils.resize(original_image, height = 500)
+#     imgray = imutils.resize(imgray, height = 500)
+#     processed_img = canny(imgray)
+#     vertices = np.array([[10,500],[10,300],[300,200],[500,200],[800,300],[800,500],
+#                          ], np.int32)
+
+#     processed_img = roi(processed_img, [vertices])
+#     # more info: http://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
+#     #                                     rho   theta   thresh  min length, max gap:        
+#     lines = cv2.HoughLinesP(processed_img, 1, np.pi/180, 180,      20,       15)
+#     m1 = 0
+#     m2 = 0
+#     try:
+#         l1, l2, m1,m2 = draw_lanes(original_image,lines)
+#         cv2.line(original_image, (l1[0], l1[1]), (l1[2], l1[3]), [0,255,0], 30)
+#         cv2.line(original_image, (l2[0], l2[1]), (l2[2], l2[3]), [0,255,0], 30)
+#     except Exception as e:
+#         print(str(e))
+#         pass
+#     try:
+#         for coords in lines:
+#             coords = coords[0]
+#             try:
+#                 cv2.line(processed_img, (coords[0], coords[1]), (coords[2], coords[3]), [255,0,0], 3)
+                
+                
+#             except Exception as e:
+#                 print(str(e))
+#     except Exception as e:
+#         pass
+#     return processed_img,original_image, m1, m2
+
+# Global parameters
+
+# Gaussian smoothing
+kernel_size = 3
+
+# Canny Edge Detector
+low_threshold = 15
+high_threshold = 30
+
+# Region-of-interest vertices
+# We want a trapezoid shape, with bottom edge at the bottom of the image
+trap_bottom_width = 0.99  # width of bottom edge of trapezoid, expressed as percentage of image width
+trap_top_width = 0.1  # ditto for top edge of trapezoid
+trap_height = 0.6  # height of the trapezoid expressed as percentage of image height
+
+# Hough Transform
+rho = 2 # distance resolution in pixels of the Hough grid
+theta = 1 * np.pi/180 # angular resolution in radians of the Hough grid
+threshold = 15	 # minimum number of votes (intersections in Hough grid cell)
+min_line_length = 10 #minimum number of pixels making up a line
+max_line_gap = 20	# maximum gap in pixels between connectable line segments
+
+
+# Helper functions
+def grayscale(img):
+    """Applies the Grayscale transform
+    This will return an image with only one color channel
+    but NOTE: to see the returned image as grayscale
+    you should call plt.imshow(gray, cmap='gray')"""
+    
+
+    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+	
+def canny(img, low_threshold, high_threshold):
+    """Applies the Canny transform"""
+    return cv2.Canny(img, low_threshold, high_threshold)
+
+def gaussian_blur(img, kernel_size):
+    """Applies a Gaussian Noise kernel"""
+    return cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
+
+def region_of_interest(img, vertices):
     """
-    Region Of Interest:
-    This function will remove all the unecessary lines. 
-    So the module will only see the road lines.
+    Applies an image mask.
+
+    Only keeps the region of the image defined by the polygon
+    formed from `vertices`. The rest of the image is set to black.
     """
-    # blank mask
-    mask = np.zeros_like(img)
-    cv2.fillPoly(mask, vertices, 255)
-    masked = cv2.bitwise_and(img, mask)
-    return masked
+    #defining a blank mask to start with
+    mask = np.zeros_like(img)   
 
-def draw_lanes(img, lines, color=[0, 255, 255], thickness=3):
+    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+        
+    #filling pixels inside the polygon defined by "vertices" with the fill color	
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
 
-    # if this fails, go with some default line
-    try:
+    #returning the image only where mask pixels are nonzero
+    masked_image = cv2.bitwise_and(img, mask)
+    return masked_image
 
-        # finds the maximum y value for a lane marker 
-        # (since we cannot assume the horizon will always be at the same point.)
+def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
+    """
+    NOTE: this is the function you might want to use as a starting point once you want to 
+    average/extrapolate the line segments you detect to map out the full
+    extent of the lane (going from the result shown in raw-lines-example.mp4
+    to that shown in P1_example.mp4).  
 
-        ys = []  
-        for i in lines:
-            for ii in i:
-                ys += [ii[1],ii[3]]
-        min_y = min(ys)
-        max_y = 600
-        new_lines = []
-        line_dict = {}
+    Think about things like separating line segments by their 
+    slope ((y2-y1)/(x2-x1)) to decide which segments are part of the left
+    line vs. the right line.  Then, you can average the position of each of 
+    the lines and extrapolate to the top and bottom of the lane.
 
-        for idx,i in enumerate(lines):
-            for xyxy in i:
-                # These four lines:
-                # modified from http://stackoverflow.com/questions/21565994/method-to-return-the-equation-of-a-straight-line-given-two-points
-                # Used to calculate the definition of a line, given two sets of coords.
-                x_coords = (xyxy[0],xyxy[2])
-                y_coords = (xyxy[1],xyxy[3])
-                A = vstack([x_coords,ones(len(x_coords))]).T
-                m, b = lstsq(A, y_coords)[0]
+    This function draws `lines` with `color` and `thickness`.	
+    Lines are drawn on the image inplace (mutates the image).
+    If you want to make the lines semi-transparent, think about combining
+    this function with the weighted_img() function below
+    """
+    # In case of error, don't draw the line(s)
+    if lines is None:
+        return
+    if len(lines) == 0:
+        return
+    draw_right = True
+    draw_left = True
 
-                # Calculating our new, and improved, xs
-                x1 = (min_y-b) / m
-                x2 = (max_y-b) / m
-
-                line_dict[idx] = [m,b,[int(x1), min_y, int(x2), max_y]]
-                new_lines.append([int(x1), min_y, int(x2), max_y])
-
-        final_lanes = {}
-
-        for idx in line_dict:
-            final_lanes_copy = final_lanes.copy()
-            m = line_dict[idx][0]
-            b = line_dict[idx][1]
-            line = line_dict[idx][2]
+    # Find slopes of all lines
+    # But only care about lines where abs(slope) > slope_threshold
+    slope_threshold = 0.5
+    slopes = []
+    new_lines = []
+    for line in lines:
+        x1, y1, x2, y2 = line[0]  # line = [[x1, y1, x2, y2]]
+        
+        # Calculate slope
+        if x2 - x1 == 0.:  # corner case, avoiding division by 0
+            slope = 999.  # practically infinite slope
+        else:
+            slope = (y2 - y1) / (x2 - x1)
             
-            if len(final_lanes) == 0:
-                final_lanes[m] = [ [m,b,line] ]
-                
-            else:
-                found_copy = False
+        # Filter lines based on slope
+        if abs(slope) > slope_threshold:
+            slopes.append(slope)
+            new_lines.append(line)
+        
+    lines = new_lines
 
-                for other_ms in final_lanes_copy:
+    # Split lines into right_lines and left_lines, representing the right and left lane lines
+    # Right/left lane lines must have positive/negative slope, and be on the right/left half of the image
+    right_lines = []
+    left_lines = []
+    for i, line in enumerate(lines):
+        x1, y1, x2, y2 = line[0]
+        img_x_center = img.shape[1] / 2  # x coordinate of center of image
+        if slopes[i] > 0 and x1 > img_x_center and x2 > img_x_center:
+            right_lines.append(line)
+        elif slopes[i] < 0 and x1 < img_x_center and x2 < img_x_center:
+            left_lines.append(line)
+            
+    # Run linear regression to find best fit line for right and left lane lines
+    # Right lane lines
+    right_lines_x = []
+    right_lines_y = []
 
-                    if not found_copy:
-                        if abs(other_ms*1.2) > abs(m) > abs(other_ms*0.8):
-                            if abs(final_lanes_copy[other_ms][0][1]*1.2) > abs(b) > abs(final_lanes_copy[other_ms][0][1]*0.8):
-                                final_lanes[other_ms].append([m,b,line])
-                                found_copy = True
-                                break
-                        else:
-                            final_lanes[m] = [ [m,b,line] ]
+    for line in right_lines:
+        x1, y1, x2, y2 = line[0]
+        
+        right_lines_x.append(x1)
+        right_lines_x.append(x2)
+        
+        right_lines_y.append(y1)
+        right_lines_y.append(y2)
+        
+    if len(right_lines_x) > 0:
+        right_m, right_b = np.polyfit(right_lines_x, right_lines_y, 1)  # y = m*x + b
+    else:
+        right_m, right_b = 1, 1
+        draw_right = False
+        
+    # Left lane lines
+    left_lines_x = []
+    left_lines_y = []
 
-        line_counter = {}
+    for line in left_lines:
+        x1, y1, x2, y2 = line[0]
+        
+        left_lines_x.append(x1)
+        left_lines_x.append(x2)
+        
+        left_lines_y.append(y1)
+        left_lines_y.append(y2)
+        
+    if len(left_lines_x) > 0:
+        left_m, left_b = np.polyfit(left_lines_x, left_lines_y, 1)  # y = m*x + b
+    else:
+        left_m, left_b = 1, 1
+        draw_left = False
 
-        for lanes in final_lanes:
-            line_counter[lanes] = len(final_lanes[lanes])
+    # Find 2 end points for right and left lines, used for drawing the line
+    # y = m*x + b --> x = (y - b)/m
+    y1 = img.shape[0]
+    y2 = img.shape[0] * (1 - trap_height)
 
-        top_lanes = sorted(line_counter.items(), key=lambda item: item[1])[::-1][:2]
+    right_x1 = (y1 - right_b) / right_m
+    right_x2 = (y2 - right_b) / right_m
 
-        lane1_id = top_lanes[0][0]
-        lane2_id = top_lanes[1][0]
+    left_x1 = (y1 - left_b) / left_m
+    left_x2 = (y2 - left_b) / left_m
 
-        def average_lane(lane_data):
-            x1s = []
-            y1s = []
-            x2s = []
-            y2s = []
-            for data in lane_data:
-                x1s.append(data[2][0])
-                y1s.append(data[2][1])
-                x2s.append(data[2][2])
-                y2s.append(data[2][3])
-            return int(mean(x1s)), int(mean(y1s)), int(mean(x2s)), int(mean(y2s)) 
+    # Convert calculated end points from float to int
+    y1 = int(y1)
+    y2 = int(y2)
+    right_x1 = int(right_x1)
+    right_x2 = int(right_x2)
+    left_x1 = int(left_x1)
+    left_x2 = int(left_x2)
 
-        l1_x1, l1_y1, l1_x2, l1_y2 = average_lane(final_lanes[lane1_id])
-        l2_x1, l2_y1, l2_x2, l2_y2 = average_lane(final_lanes[lane2_id])
+    # Draw the right and left lines on image
+    if draw_right:
+        cv2.line(img, (right_x1, y1), (right_x2, y2), color, thickness)
+    if draw_left:
+        cv2.line(img, (left_x1, y1), (left_x2, y2), color, thickness)
+	
+def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
+    """
+    `img` should be the output of a Canny transform.
+        
+    Returns an image with hough lines drawn.
+    """
+    lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
+    line_img = np.zeros((*img.shape, 3), dtype=np.uint8)  # 3-channel RGB image
+    draw_lines(line_img, lines)
+    return line_img
 
-        return [l1_x1, l1_y1, l1_x2, l1_y2], [l2_x1, l2_y1, l2_x2, l2_y2], lane1_id, lane2_id
-    except Exception as e:
-        print(str(e))
+# Python 3 has support for cool math symbols.
 
-def process_img(image):
-    original_image = image
-    # edge detection
-    processed_img =  cv2.Canny(image, threshold1 = 150, threshold2=250)
+def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
+    """
+    `img` is the output of the hough_lines(), An image with lines drawn on it.
+    Should be a blank image (all black) with lines drawn on it.
+
+    `initial_img` should be the image before any processing.
+
+    The result image is computed as follows:
+
+    initial_img * α + img * β + λ
+    NOTE: initial_img and img must be the same shape!
+    """
+    return cv2.addWeighted(initial_img, α, img, β, λ)
+
+def filter_colors(image):
+    """
+    Filter the image to include only yellow and white pixels
+    """
+    # Filter white pixels
+    lower_white = np.array([95, 60, 30])
+    upper_white = np.array([110, 80, 90])
+    white_mask = cv2.inRange(image, lower_white, upper_white)
+    white_image = cv2.bitwise_and(image, image, mask=white_mask)
+
+    # Filter yellow pixels
+    # TODO: fix the problem of shadow
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    lower_gray = np.array([10,0,60])
+    upper_gray = np.array([120,20,140])
+    gray_mask = cv2.inRange(hsv, lower_gray, upper_gray)
+    gray_image = cv2.bitwise_and(image, image, mask=gray_mask)
+
+    # Combine the two above images
+    image2 = cv2.addWeighted(white_image, 1., gray_image, 1., 0.)
+    return image2
+
+def annotate_image_array(image_in):
+    """ Given an image Numpy array, return the annotated image as a Numpy array """
+    # Apply Gaussian smoothing
+    blur_gray = gaussian_blur(image_in, kernel_size)
+    # Only keep white and yellow pixels in the image, all other pixels become black
+    image = filter_colors(blur_gray)
     
-    processed_img = cv2.GaussianBlur(processed_img,(5,5),0)
+    # Read in and grayscale the image
+    gray = grayscale(image)
+
+    # Apply Canny Edge Detector
+    edges = canny(gray, low_threshold, high_threshold)
+    cv2.imshow('Debugging view', edges)
+    # Create masked edges using trapezoid-shaped region-of-interest
+    imshape = image.shape
+    vertices = np.array([[\
+        ((imshape[1] * (1 - trap_bottom_width)) // 2, imshape[0]),\
+        ((imshape[1] * (1 - trap_top_width)) // 2, imshape[0] - imshape[0] * trap_height),\
+        (imshape[1] - (imshape[1] * (1 - trap_top_width)) // 2, imshape[0] - imshape[0] * trap_height),\
+        (imshape[1] - (imshape[1] * (1 - trap_bottom_width)) // 2, imshape[0])]]\
+        , dtype=np.int32)
+    masked_edges = region_of_interest(edges, vertices)
+    cv2.imshow('ROI view', masked_edges)
+    # Run Hough on edge detected image
+    line_image = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
+
+    # Draw lane lines on the original image
+    initial_image = image_in.astype('uint8')
+    annotated_image = weighted_img(line_image, initial_image)
+
+    return annotated_image
+
+def annotate_image(input_file):
+    """ Given input_file image, save annotated image to output_file """
+    annotated_image = annotate_image_array(input_file)
     
-    vertices = np.array([[10,500],[10,300],[300,200],[500,200],[800,300],[800,500],
-                         ], np.int32)
-
-    processed_img = roi(processed_img, [vertices])
-
-    # more info: http://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
-    #                                     rho   theta   thresh  min length, max gap:        
-    lines = cv2.HoughLinesP(processed_img, 1, np.pi/180, 180,      20,       15)
-    m1 = 0
-    m2 = 0
-    try:
-        l1, l2, m1,m2 = draw_lanes(original_image,lines)
-        cv2.line(original_image, (l1[0], l1[1]), (l1[2], l1[3]), [0,255,0], 30)
-        cv2.line(original_image, (l2[0], l2[1]), (l2[2], l2[3]), [0,255,0], 30)
-    except Exception as e:
-        print(str(e))
-        pass
-    try:
-        for coords in lines:
-            coords = coords[0]
-            try:
-                cv2.line(processed_img, (coords[0], coords[1]), (coords[2], coords[3]), [255,0,0], 3)
-                
-                
-            except Exception as e:
-                print(str(e))
-    except Exception as e:
-        pass
-
-    return processed_img,original_image, m1, m2
+    return annotated_image
 
 def straight():
     PressKey(Z)
@@ -179,8 +378,10 @@ while True:
     screen =  np.array(ImageGrab.grab(bbox=(0,40,800,640)))
     print('Frame took {} seconds'.format(time.time()-last_time))
     last_time = time.time()
-    new_screen,original_image, m1, m2 = process_img(screen)
-    cv2.imshow('Gray view', new_screen)
+    #new_screen,original_image, m1, m2 = process_img(screen)
+    
+    new_screen = annotate_image(screen)
+    cv2.imshow('Final view', new_screen)
     #cv2.imshow('Module View',cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
 
     # if m1 < 0 and m2 < 0:
