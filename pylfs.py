@@ -71,6 +71,7 @@ import matplotlib.image as mpimg
 #         pass
 #     return processed_img,original_image, m1, m2
 
+
 # Global parameters
 
 # Gaussian smoothing
@@ -101,7 +102,6 @@ def grayscale(img):
     but NOTE: to see the returned image as grayscale
     you should call plt.imshow(gray, cmap='gray')"""
     
-
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 	
 def canny(img, low_threshold, high_threshold):
@@ -136,7 +136,7 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
+def draw_lines(img, lines, color=[0, 255, 0], thickness=10):
     """
     NOTE: this is the function you might want to use as a starting point once you want to 
     average/extrapolate the line segments you detect to map out the full
@@ -311,7 +311,7 @@ def annotate_image_array(image_in):
     """ Given an image Numpy array, return the annotated image as a Numpy array """
     # Apply Gaussian smoothing
     blur_gray = gaussian_blur(image_in, kernel_size)
-    # Only keep white and yellow pixels in the image, all other pixels become black
+    # Only keep white and gray pixels in the image, all other pixels become black
     image = filter_colors(blur_gray)
     
     # Read in and grayscale the image
@@ -328,10 +328,11 @@ def annotate_image_array(image_in):
         (imshape[1] - (imshape[1] * (1 - trap_top_width)) // 2, imshape[0] - imshape[0] * trap_height),\
         (imshape[1] - (imshape[1] * (1 - trap_bottom_width)) // 2, imshape[0])]]\
         , dtype=np.int32)
-    masked_edges = region_of_interest(edges, vertices)
-    cv2.imshow('ROI view', masked_edges)
+    #masked_edges = region_of_interest(edges, vertices)
+    #cv2.imshow('ROI view', masked_edges)
+    
     # Run Hough on edge detected image
-    line_image = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
+    line_image = hough_lines(edges, rho, theta, threshold, min_line_length, max_line_gap)
 
     # Draw lane lines on the original image
     initial_image = image_in.astype('uint8')
@@ -366,11 +367,6 @@ def slow():
     ReleaseKey(Z)
     ReleaseKey(Q)
     ReleaseKey(D)
-
-
-for i in list(range(4))[::-1]:
-    print(i+1)
-    time.sleep(1)
 
 
 last_time = time.time()
