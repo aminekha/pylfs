@@ -78,8 +78,8 @@ import matplotlib.image as mpimg
 kernel_size = 3
 
 # Canny Edge Detector
-low_threshold = 15
-high_threshold = 30
+low_threshold = 280
+high_threshold = 360
 
 # Region-of-interest vertices
 # We want a trapezoid shape, with bottom edge at the bottom of the image
@@ -88,12 +88,11 @@ trap_top_width = 0.1  # ditto for top edge of trapezoid
 trap_height = 0.6  # height of the trapezoid expressed as percentage of image height
 
 # Hough Transform
-rho = 2 # distance resolution in pixels of the Hough grid
-theta = 1 * np.pi/180 # angular resolution in radians of the Hough grid
-threshold = 15	 # minimum number of votes (intersections in Hough grid cell)
+rho = 1 # distance resolution in pixels of the Hough grid
+theta = np.pi/180 # angular resolution in radians of the Hough grid
+threshold = 1	 # minimum number of votes (intersections in Hough grid cell)
 min_line_length = 10 #minimum number of pixels making up a line
 max_line_gap = 20	# maximum gap in pixels between connectable line segments
-
 
 # Helper functions
 def grayscale(img):
@@ -265,6 +264,7 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     Returns an image with hough lines drawn.
     """
     lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
+    
     line_img = np.zeros((*img.shape, 3), dtype=np.uint8)  # 3-channel RGB image
     draw_lines(line_img, lines)
     return line_img
@@ -290,43 +290,39 @@ def filter_colors(image):
     Filter the image to include only yellow and white pixels
     """
     # Filter white pixels
-    lower_white = np.array([95, 60, 30])
-    upper_white = np.array([110, 80, 90])
-    white_mask = cv2.inRange(image, lower_white, upper_white)
-    white_image = cv2.bitwise_and(image, image, mask=white_mask)
+    # lower_white = np.array([200, 200, 200])
+    # upper_white = np.array([255, 255, 255])
+    # white_mask = cv2.inRange(image, lower_white, upper_white)
+    # white_image = cv2.bitwise_and(image, image, mask=white_mask)
 
-    # Filter yellow pixels
+    # Filter white pixels
     # TODO: fix the problem of shadow
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower_gray = np.array([10,0,60])
-    upper_gray = np.array([120,20,140])
+    lower_gray = np.array([105,0,140])
+    upper_gray = np.array([125,20,220])
     gray_mask = cv2.inRange(hsv, lower_gray, upper_gray)
     gray_image = cv2.bitwise_and(image, image, mask=gray_mask)
 
     # Combine the two above images
-    image2 = cv2.addWeighted(white_image, 1., gray_image, 1., 0.)
-    return image2
+    # image2 = cv2.addWeighted(white_image, 1., gray_image, 1., 0.)
+    return gray_image
 
-def annotate_image_array(image_in):
+def annotate_image(image_in):
     """ Given an image Numpy array, return the annotated image as a Numpy array """
-    
     # Read in and grayscale the image
-    gray = grayscale(image_in)
+    #gray = grayscale(image_in)
     
-    # darken the gray image
-    
-    # Only keep white and gray pixels in the image, all other pixels become black
-    image = filter_colors(gray)
     
     # Apply Gaussian smoothing
-    blur_gray = gaussian_blur(image, kernel_size)
+    blur_gray = gaussian_blur(image_in, kernel_size)
     
+    # Only keep white and gray pixels in the image, all other pixels become black
+    image = filter_colors(blur_gray)
     
-    
-
     # Apply Canny Edge Detector
-    edges = canny(blur_gray, low_threshold, high_threshold)
-    cv2.imshow('Debugging view', edges)
+    edges = canny(image, low_threshold, high_threshold)
+    cv2.imshow('Canny view', edges)
+    
     # Create masked edges using trapezoid-shaped region-of-interest
     imshape = image.shape
     vertices = np.array([[\
@@ -337,20 +333,12 @@ def annotate_image_array(image_in):
         , dtype=np.int32)
     #masked_edges = region_of_interest(edges, vertices)
     #cv2.imshow('ROI view', masked_edges)
-    
     # Run Hough on edge detected image
     line_image = hough_lines(edges, rho, theta, threshold, min_line_length, max_line_gap)
-
     # Draw lane lines on the original image
     initial_image = image_in.astype('uint8')
     annotated_image = weighted_img(line_image, initial_image)
 
-    return annotated_image
-
-def annotate_image(input_file):
-    """ Given input_file image, save annotated image to output_file """
-    annotated_image = annotate_image_array(input_file)
-    
     return annotated_image
 
 def straight():
@@ -386,13 +374,6 @@ while True:
     new_screen = annotate_image(screen)
     cv2.imshow('Final view', new_screen)
     #cv2.imshow('Module View',cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
-
-    # if m1 < 0 and m2 < 0:
-    #     right()
-    # elif m1 > 0  and m2 > 0:
-    #     left()
-    # else:
-    #     straight()
     
     #cv2.imshow('window',cv2.cvtColor(screen, cv2.COLOR_BGR2RGB))
     if cv2.waitKey(25) & 0xFF == ord('q'):
