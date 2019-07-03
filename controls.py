@@ -11,7 +11,7 @@ sendInput = ctypes.windll.user32.SendInput
 Z = 0x11 # forward
 Q = 0x1E # left
 D = 0x20 # right
-S = 0x39 # space(stop)
+M = 0x32 # M(stop)
 
 NP_2 = 0x50
 NP_4 = 0x4B

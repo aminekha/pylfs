@@ -10,15 +10,17 @@ from get_keys import key_check
 def keys_to_output(keys):
     """
     Convert keys to a One-Hot encoder array
-    [Z,Q,D]
+    [Z,Q,D,M]
     """
-    output = [0, 0, 0]
+    output = [0, 0, 0, 0]
     if "Z" in keys:
         output[0] = 1
     if "Q" in keys:
         output[1] = 1
-    else:
+    if "D" in keys:
         output[2] = 1
+    if "M" in keys:
+        output[3] = 1
     return output
 
 file_name = "training_data.npy"
@@ -48,7 +50,7 @@ def main():
             output = keys_to_output(keys)
             training_data.append([screen, output])
             if len(training_data) % 100 == 0:
-                print("100 Reached!")
+                print(f"{len(training_data)} Reached!")
             
             if len(training_data) % 1000 == 0:
                 print(len(training_data))
